@@ -6,7 +6,7 @@ import Navbar from "../components/Navbar";
 import TripForm from "../components/TripForm";
 import { generateTrip } from "../lib/api";
 import { useState } from "react";
-import type { TripPlace, TripPlan, TripRequest } from "../types/trip";
+import type { TripLoadingStage, TripPlace, TripPlan, TripRequest } from "../types/trip";
 
 function firstAvailablePlace(plan: TripPlan): TripPlace | null {
   for (const day of plan.days) {
@@ -22,11 +22,18 @@ export default function Home() {
   const [plan, setPlan] = useState<TripPlan | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<TripPlace | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<TripLoadingStage>("idle");
   const [error, setError] = useState("");
 
   async function handleGenerateTrip(payload: TripRequest) {
     setIsLoading(true);
+    setLoadingStage("planning");
     setError("");
+
+    const stageTimers: Array<ReturnType<typeof setTimeout>> = [
+      setTimeout(() => setLoadingStage("places"), 3500),
+      setTimeout(() => setLoadingStage("map"), 10000)
+    ];
 
     try {
       const trip = await generateTrip(payload);
@@ -39,36 +46,35 @@ export default function Home() {
           : "Unable to generate a trip right now. Please try again.";
       setError(message);
     } finally {
+      stageTimers.forEach((timer) => clearTimeout(timer));
       setIsLoading(false);
+      setLoadingStage("idle");
     }
   }
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] text-gray-900">
+    <main className="flex h-screen flex-col overflow-hidden bg-[#F8FAFC] text-gray-900">
       <Navbar />
 
-      <div className="w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-10 2xl:px-12">
-        <section className="mb-6 sm:mb-7">
-          <h1 className="max-w-4xl text-4xl font-bold leading-tight tracking-normal text-gray-950 sm:text-5xl">
-            Plan your perfect trip with AI
-          </h1>
-          <p className="mt-3 max-w-2xl text-lg leading-8 text-gray-500">
-            Generate a personalized itinerary and see every stop on the map.
-          </p>
-        </section>
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-3 px-3 py-3 sm:px-4 lg:px-6 2xl:px-8">
+        <TripForm
+          isLoading={isLoading}
+          loadingStage={loadingStage}
+          onSubmit={handleGenerateTrip}
+        />
 
-        <TripForm isLoading={isLoading} onSubmit={handleGenerateTrip} />
-
-        <section className="mt-4 grid gap-4 lg:grid-cols-[minmax(360px,0.34fr)_minmax(0,0.66fr)]">
+        <section className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(360px,0.34fr)_minmax(0,0.66fr)]">
           <ItinerarySidebar
             error={error}
             isLoading={isLoading}
+            loadingStage={loadingStage}
             onSelectPlace={setSelectedPlace}
             plan={plan}
             selectedPlace={selectedPlace}
           />
           <GoogleMapView
             isLoading={isLoading}
+            loadingStage={loadingStage}
             onSelectPlace={setSelectedPlace}
             plan={plan}
             selectedPlace={selectedPlace}

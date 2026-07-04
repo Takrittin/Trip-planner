@@ -4,10 +4,12 @@ import { GoogleMap, InfoWindowF, LoadScript, MarkerF } from "@react-google-maps/
 import { AlertTriangle, Loader2, MapPinned, Star } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { TripPlace, TripPlan } from "../types/trip";
+import { getTripLoadingStageInfo } from "../lib/loadingStages";
+import type { TripLoadingStage, TripPlace, TripPlan } from "../types/trip";
 
 type GoogleMapViewProps = {
   isLoading: boolean;
+  loadingStage: TripLoadingStage;
   onSelectPlace: (place: TripPlace) => void;
   plan: TripPlan | null;
   selectedPlace: TripPlace | null;
@@ -37,6 +39,7 @@ function placeKey(place: TripPlace) {
 
 export default function GoogleMapView({
   isLoading,
+  loadingStage,
   onSelectPlace,
   plan,
   selectedPlace
@@ -46,6 +49,7 @@ export default function GoogleMapView({
   const [isMapScriptLoaded, setIsMapScriptLoaded] = useState(false);
   const [mapLoadError, setMapLoadError] = useState("");
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const activeLoadingStage = getTripLoadingStageInfo(loadingStage);
 
   const mappedPlaces = useMemo(
     () => plan?.days.flatMap((day) => day.places).filter(hasCoordinates) ?? [],
@@ -70,20 +74,20 @@ export default function GoogleMapView({
   if (!plan) {
     return (
       <MapShell>
-        <div className="flex min-h-[520px] flex-col items-center justify-center bg-blue-50 px-6 text-center lg:min-h-[760px]">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm ring-1 ring-blue-100">
+        <div className="flex h-full min-h-0 flex-col items-center justify-center bg-blue-50 px-6 text-center sm:min-h-[360px]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm ring-1 ring-blue-100 sm:h-14 sm:w-14">
             {isLoading ? (
-              <Loader2 aria-hidden="true" className="h-7 w-7 animate-spin" />
+              <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin sm:h-7 sm:w-7" />
             ) : (
-              <MapPinned aria-hidden="true" className="h-7 w-7" />
+              <MapPinned aria-hidden="true" className="h-5 w-5 sm:h-7 sm:w-7" />
             )}
           </div>
-          <h2 className="mt-4 text-xl font-semibold text-gray-950">
-            {isLoading ? "Generating mapped trip" : "Map preview"}
+          <h2 className="mt-2 text-lg font-semibold text-gray-950 sm:mt-4 sm:text-xl">
+            {isLoading ? activeLoadingStage.mapMessage : "Map preview"}
           </h2>
-          <p className="mt-2 max-w-md text-sm leading-6 text-gray-600">
+          <p className="mt-1 hidden max-w-md text-sm leading-6 text-gray-600 sm:mt-2 sm:block">
             {isLoading
-              ? "The map will load after Google verifies the suggested places."
+              ? "The map will load after the planner verifies the suggested places."
               : "Generate a trip to load Google Maps and show verified stops."}
           </p>
         </div>
@@ -94,7 +98,7 @@ export default function GoogleMapView({
   if (!hasUsableApiKey(apiKey)) {
     return (
       <MapShell>
-        <div className="flex min-h-[520px] flex-col items-center justify-center bg-blue-50 px-6 text-center lg:min-h-[760px]">
+        <div className="flex h-full min-h-0 flex-col items-center justify-center bg-blue-50 px-6 text-center sm:min-h-[360px]">
           <AlertTriangle aria-hidden="true" className="h-10 w-10 text-blue-600" />
           <h2 className="mt-4 text-xl font-semibold text-gray-950">Google Maps key required</h2>
           <p className="mt-2 max-w-md text-sm leading-6 text-gray-600">
@@ -108,7 +112,7 @@ export default function GoogleMapView({
   if (mapLoadError) {
     return (
       <MapShell>
-        <div className="flex min-h-[520px] flex-col items-center justify-center bg-blue-50 px-6 text-center lg:min-h-[760px]">
+        <div className="flex h-full min-h-0 flex-col items-center justify-center bg-blue-50 px-6 text-center sm:min-h-[360px]">
           <AlertTriangle aria-hidden="true" className="h-10 w-10 text-blue-600" />
           <h2 className="mt-4 text-xl font-semibold text-gray-950">Map could not load</h2>
           <p className="mt-2 max-w-md text-sm leading-6 text-gray-600">{mapLoadError}</p>
@@ -129,7 +133,7 @@ export default function GoogleMapView({
         {isMapScriptLoaded ? (
           <GoogleMap
             center={center}
-            mapContainerClassName="h-[520px] w-full lg:h-[760px]"
+            mapContainerClassName="h-full min-h-0 w-full sm:min-h-[360px]"
             onLoad={(map) => {
               mapRef.current = map;
             }}
@@ -200,7 +204,7 @@ export default function GoogleMapView({
             ) : null}
           </GoogleMap>
         ) : (
-          <div className="flex min-h-[520px] items-center justify-center bg-blue-50 text-sm font-medium text-gray-600 lg:min-h-[760px]">
+          <div className="flex h-full min-h-0 items-center justify-center bg-blue-50 text-sm font-medium text-gray-600 sm:min-h-[360px]">
             <Loader2 aria-hidden="true" className="mr-2 h-5 w-5 animate-spin text-blue-600" />
             Loading map
           </div>
@@ -211,7 +215,7 @@ export default function GoogleMapView({
         <div className="absolute inset-0 flex items-center justify-center bg-white/55 backdrop-blur-[1px]">
           <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 text-sm font-medium text-gray-700 shadow-sm">
             <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-blue-600" />
-            Generating and verifying places
+            {activeLoadingStage.mapMessage}
           </div>
         </div>
       ) : null}
@@ -221,7 +225,7 @@ export default function GoogleMapView({
 
 function MapShell({ children }: { children: ReactNode }) {
   return (
-    <section className="relative min-h-[520px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:min-h-[760px]">
+    <section className="relative h-full min-h-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       {children}
     </section>
   );

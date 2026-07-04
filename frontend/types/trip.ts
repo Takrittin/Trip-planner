@@ -6,6 +6,8 @@ export type TripRequest = {
   travelStyle: "relaxed" | "balanced" | "packed";
 };
 
+export type TripLoadingStage = "idle" | "planning" | "places" | "map";
+
 export type TripPlace = {
   name: string;
   category: string;
