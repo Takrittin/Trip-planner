@@ -1,10 +1,12 @@
 "use client";
 
 import { GoogleMap, InfoWindowF, LoadScript, MarkerF } from "@react-google-maps/api";
-import { AlertTriangle, Loader2, MapPinned, Star } from "lucide-react";
+import { AlertTriangle, Loader2, MapPinned, Navigation, Star } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getGoogleMapsDirectionsUrl } from "../lib/googleMaps";
 import { getTripLoadingStageInfo } from "../lib/loadingStages";
+import { getMapStopLabel, getStopDescription } from "../lib/placeLabels";
 import type { TripLoadingStage, TripPlace, TripPlan } from "../types/trip";
 
 type GoogleMapViewProps = {
@@ -24,6 +26,15 @@ const bangkokCenter = {
   lat: 13.7563,
   lng: 100.5018
 };
+const markerColors = [
+  "#2563EB",
+  "#16A34A",
+  "#EA580C",
+  "#9333EA",
+  "#DB2777",
+  "#0891B2",
+  "#4F46E5"
+];
 
 function hasUsableApiKey(apiKey: string | undefined): apiKey is string {
   return Boolean(apiKey && apiKey !== "your_google_maps_api_key_here");
@@ -35,6 +46,14 @@ function hasCoordinates(place: TripPlace): place is MappedPlace {
 
 function placeKey(place: TripPlace) {
   return `${place.suggested_day}-${place.suggested_order}-${place.name}`;
+}
+
+function getMarkerColor(place: TripPlace, isSelected: boolean) {
+  if (isSelected) {
+    return "#111827";
+  }
+
+  return markerColors[(place.suggested_day - 1) % markerColors.length];
 }
 
 export default function GoogleMapView({
@@ -155,18 +174,18 @@ export default function GoogleMapView({
                   key={placeKey(place)}
                   icon={{
                     path: google.maps.SymbolPath.CIRCLE,
-                    fillColor: isSelected ? "#1D4ED8" : "#2563EB",
+                    fillColor: getMarkerColor(place, isSelected),
                     fillOpacity: 1,
                     strokeColor: "#FFFFFF",
                     strokeOpacity: 1,
                     strokeWeight: 3,
-                    scale: isSelected ? 16 : 14
+                    scale: isSelected ? 19 : 17
                   }}
                   label={{
                     color: "#FFFFFF",
-                    fontSize: "13px",
+                    fontSize: "11px",
                     fontWeight: "700",
-                    text: String(place.suggested_order)
+                    text: getMapStopLabel(place)
                   }}
                   position={{ lat: place.lat, lng: place.lng }}
                   onClick={() => {
@@ -183,8 +202,15 @@ export default function GoogleMapView({
                 onCloseClick={() => setActivePlace(null)}
               >
                 <div className="max-w-[260px] p-1 text-gray-900">
-                  <h3 className="text-base font-semibold">{activePlace.name}</h3>
-                  <p className="mt-1 text-xs font-medium text-blue-700">{activePlace.category}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-base font-semibold">{activePlace.name}</h3>
+                    <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                      {getMapStopLabel(activePlace)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-blue-700">
+                    {getStopDescription(activePlace)} · {activePlace.category}
+                  </p>
                   {activePlace.formatted_address ? (
                     <p className="mt-2 text-xs leading-5 text-gray-600">
                       {activePlace.formatted_address}
@@ -199,6 +225,15 @@ export default function GoogleMapView({
                   <p className="mt-3 border-t border-gray-100 pt-3 text-xs leading-5 text-gray-600">
                     {activePlace.reason}
                   </p>
+                  <a
+                    className="mt-3 inline-flex h-8 items-center gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                    href={getGoogleMapsDirectionsUrl(activePlace)}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <Navigation aria-hidden="true" className="h-3.5 w-3.5" />
+                    Directions
+                  </a>
                 </div>
               </InfoWindowF>
             ) : null}

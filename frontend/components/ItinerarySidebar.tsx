@@ -11,7 +11,9 @@ import {
   Route,
   Star
 } from "lucide-react";
+import { getGoogleMapsDirectionsUrl } from "../lib/googleMaps";
 import { getTripLoadingStageInfo } from "../lib/loadingStages";
+import { getMapStopLabel, getStopDescription } from "../lib/placeLabels";
 import type { TripLoadingStage, TripPlace, TripPlan } from "../types/trip";
 
 type ItinerarySidebarProps = {
@@ -127,77 +129,101 @@ export default function ItinerarySidebar({
                     const isSelected =
                       selectedPlace !== null && placeKey(selectedPlace) === placeKey(place);
                     const photoAttribution = getPhotoAttribution(place);
+                    const mapStopLabel = getMapStopLabel(place);
 
                     return (
-                      <button
+                      <div
                         key={placeKey(place)}
-                        className={`w-full rounded-2xl border p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/60 focus:outline-none focus:ring-4 focus:ring-blue-100 ${
+                        className={`w-full rounded-2xl border p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/60 focus-within:ring-4 focus-within:ring-blue-100 ${
                           isSelected
                             ? "border-blue-600 bg-blue-50"
                             : "border-gray-200 bg-white"
                         }`}
-                        type="button"
-                        onClick={() => onSelectPlace(place)}
                       >
-                        <div className="flex flex-col gap-3 sm:flex-row">
-                          <PlaceThumbnail place={place} />
+                        <button
+                          className="block w-full rounded-xl text-left focus:outline-none"
+                          type="button"
+                          onClick={() => onSelectPlace(place)}
+                        >
+                          <span className="flex flex-col gap-3 sm:flex-row">
+                            <PlaceThumbnail place={place} />
 
-                          <span className="min-w-0 flex-1">
-                            <span className="flex flex-wrap items-center gap-2">
-                              <span className="font-semibold text-gray-950">{place.name}</span>
-                              <span
-                                className={`rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${categoryClass(
-                                  place.category
-                                )}`}
-                              >
-                                {place.category}
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold text-gray-950">{place.name}</span>
+                                <span
+                                  className={`rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${categoryClass(
+                                    place.category
+                                  )}`}
+                                >
+                                  {place.category}
+                                </span>
+                                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                                  Map {mapStopLabel}
+                                </span>
                               </span>
-                            </span>
 
-                            <span className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
-                              <span className="flex items-center gap-1">
-                                <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
-                                {Math.round(place.estimated_time_minutes / 60) >= 1
-                                  ? `${Math.round(place.estimated_time_minutes / 60)}h`
-                                  : `${place.estimated_time_minutes}m`}
-                              </span>
-                              {typeof place.rating === "number" ? (
+                              <span className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
                                 <span className="flex items-center gap-1">
-                                  <Star
-                                    aria-hidden="true"
-                                    className="h-3.5 w-3.5 fill-amber-400 text-amber-400"
-                                  />
-                                  {place.rating.toFixed(1)}
+                                  <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
+                                  {Math.round(place.estimated_time_minutes / 60) >= 1
+                                    ? `${Math.round(place.estimated_time_minutes / 60)}h`
+                                    : `${place.estimated_time_minutes}m`}
+                                </span>
+                                {typeof place.rating === "number" ? (
+                                  <span className="flex items-center gap-1">
+                                    <Star
+                                      aria-hidden="true"
+                                      className="h-3.5 w-3.5 fill-amber-400 text-amber-400"
+                                    />
+                                    {place.rating.toFixed(1)}
+                                  </span>
+                                ) : null}
+                              </span>
+
+                              <span className="mt-2 block text-sm leading-6 text-gray-600">
+                                {place.reason}
+                              </span>
+
+                              {place.formatted_address ? (
+                                <span className="mt-2 flex items-start gap-1.5 text-xs leading-5 text-gray-500">
+                                  <MapPin aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                  {place.formatted_address}
+                                </span>
+                              ) : null}
+
+                              {photoAttribution ? (
+                                <span className="mt-2 block text-[11px] leading-4 text-gray-400">
+                                  Photo: {photoAttribution}
+                                </span>
+                              ) : null}
+
+                              {!hasCoordinates(place) ? (
+                                <span className="mt-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                                  <AlertTriangle aria-hidden="true" className="h-4 w-4" />
+                                  Location not found on Google Maps.
                                 </span>
                               ) : null}
                             </span>
-
-                            <span className="mt-2 block text-sm leading-6 text-gray-600">
-                              {place.reason}
-                            </span>
-
-                            {place.formatted_address ? (
-                              <span className="mt-2 flex items-start gap-1.5 text-xs leading-5 text-gray-500">
-                                <MapPin aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                                {place.formatted_address}
-                              </span>
-                            ) : null}
-
-                            {photoAttribution ? (
-                              <span className="mt-2 block text-[11px] leading-4 text-gray-400">
-                                Photo: {photoAttribution}
-                              </span>
-                            ) : null}
-
-                            {!hasCoordinates(place) ? (
-                              <span className="mt-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-                                <AlertTriangle aria-hidden="true" className="h-4 w-4" />
-                                Location not found on Google Maps.
-                              </span>
-                            ) : null}
                           </span>
+                        </button>
+
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                          <span className="text-xs font-medium text-gray-400">
+                            {getStopDescription(place)}
+                          </span>
+                          <a
+                            aria-label={`Get directions to ${place.name} in Google Maps`}
+                            className="inline-flex h-9 items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                            href={getGoogleMapsDirectionsUrl(place)}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            <Navigation aria-hidden="true" className="h-4 w-4" />
+                            Directions
+                          </a>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
