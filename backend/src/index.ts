@@ -1,6 +1,7 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import destinationSuggestionsRouter from "./routes/destinationSuggestions.js";
 import generateTripRouter from "./routes/generateTrip.js";
 import placePhotoRouter from "./routes/placePhoto.js";
 
@@ -18,6 +19,7 @@ app.get("/", (_req, res) => {
   });
 });
 
+app.use("/api/destination-suggestions", destinationSuggestionsRouter);
 app.use("/api/generate-trip", generateTripRouter);
 app.use("/api/place-photo", placePhotoRouter);
 

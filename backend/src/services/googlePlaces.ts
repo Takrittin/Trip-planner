@@ -1,5 +1,8 @@
 type GooglePlacesTextSearchResponse = {
   places?: Array<{
+    displayName?: {
+      text?: string;
+    };
     id?: string;
     formattedAddress?: string;
     location?: {
@@ -19,6 +22,18 @@ type GooglePlacesTextSearchResponse = {
   error?: {
     message?: string;
   };
+};
+
+type GoogleGeocodeResponse = {
+  results?: Array<{
+    address_components?: Array<{
+      long_name?: string;
+      short_name?: string;
+      types?: string[];
+    }>;
+  }>;
+  status?: string;
+  error_message?: string;
 };
 
 type PlacePhotoMediaResponse = {
@@ -44,12 +59,29 @@ export type GooglePlaceResult = {
   }>;
 };
 
+export type DestinationSuggestion = {
+  id: string;
+  name: string;
+  formatted_address: string;
+  lat: number;
+  lng: number;
+  rating?: number;
+};
+
+export type DestinationSuggestionsResult = {
+  country?: string;
+  locality?: string;
+  suggestions: DestinationSuggestion[];
+};
+
 const CACHE_MAX_ENTRIES = 250;
 const PLACE_SEARCH_CACHE_TTL_MS = 15 * 60 * 1000;
 const PHOTO_URI_CACHE_TTL_MS = 10 * 60 * 1000;
+const DESTINATION_SUGGESTIONS_CACHE_TTL_MS = 30 * 60 * 1000;
 const placePhotoNamePattern = /^places\/[^/]+\/photos\/[^/?#]+$/;
 const placeSearchCache = new Map<string, CacheEntry<GooglePlaceResult | null>>();
 const placePhotoUriCache = new Map<string, CacheEntry<string | null>>();
+const destinationSuggestionsCache = new Map<string, CacheEntry<DestinationSuggestionsResult>>();
 
 function getGoogleMapsApiKey() {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
@@ -63,6 +95,25 @@ function getGoogleMapsApiKey() {
 
 function normalizeCacheKey(...parts: string[]) {
   return parts.map((part) => part.trim().toLowerCase().replace(/\s+/g, " ")).join("|");
+}
+
+function roundCoordinate(value: number) {
+  return value.toFixed(2);
+}
+
+function findAddressComponent(
+  results: GoogleGeocodeResponse["results"],
+  type: string
+): string | undefined {
+  for (const result of results ?? []) {
+    for (const component of result.address_components ?? []) {
+      if (component.types?.includes(type) && component.long_name) {
+        return component.long_name;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 function remember<T>(
@@ -159,6 +210,148 @@ export async function searchGooglePlace(
       return null;
     }
   });
+}
+
+async function reverseGeocodeLocation(apiKey: string, lat: number, lng: number) {
+  try {
+    const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+    url.searchParams.set("latlng", `${lat},${lng}`);
+    url.searchParams.set("key", apiKey);
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(
+        `Google reverse geocode failed with status ${response.status}. ${
+          errorText || response.statusText
+        }`
+      );
+      return {};
+    }
+
+    const data = (await response.json()) as GoogleGeocodeResponse;
+
+    if (data.status && data.status !== "OK") {
+      console.warn(`Google reverse geocode returned ${data.status}. ${data.error_message || ""}`);
+      return {};
+    }
+
+    const country = findAddressComponent(data.results, "country");
+    const locality =
+      findAddressComponent(data.results, "locality") ||
+      findAddressComponent(data.results, "administrative_area_level_1");
+
+    return { country, locality };
+  } catch (error) {
+    console.warn("Google reverse geocode lookup failed.", error);
+    return {};
+  }
+}
+
+export async function getDestinationSuggestionsForLocation(
+  lat: number,
+  lng: number
+): Promise<DestinationSuggestionsResult> {
+  const apiKey = getGoogleMapsApiKey();
+  const cacheKey = normalizeCacheKey(roundCoordinate(lat), roundCoordinate(lng));
+
+  return remember(
+    destinationSuggestionsCache,
+    cacheKey,
+    DESTINATION_SUGGESTIONS_CACHE_TTL_MS,
+    async () => {
+      const { country, locality } = await reverseGeocodeLocation(apiKey, lat, lng);
+      const destinationScope = country || "near this location";
+      const textQuery = country
+        ? `popular travel destinations in ${country}`
+        : "popular tourist attractions";
+
+      try {
+        const requestBody: Record<string, unknown> = {
+          textQuery,
+          maxResultCount: 8
+        };
+
+        if (!country) {
+          requestBody.locationBias = {
+            circle: {
+              center: {
+                latitude: lat,
+                longitude: lng
+              },
+              radius: 50000
+            }
+          };
+        }
+
+        const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask":
+              "places.id,places.displayName,places.formattedAddress,places.location,places.rating"
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.warn(
+            `Google destination suggestions failed for "${destinationScope}" with status ${
+              response.status
+            }. ${errorText || response.statusText}`
+          );
+          return { country, locality, suggestions: [] };
+        }
+
+        const data = (await response.json()) as GooglePlacesTextSearchResponse;
+        const seenNames = new Set<string>();
+        const suggestions =
+          data.places
+            ?.map((place): DestinationSuggestion | null => {
+              const name = place.displayName?.text?.trim();
+
+              if (
+                !place.id ||
+                !name ||
+                typeof place.location?.latitude !== "number" ||
+                typeof place.location?.longitude !== "number"
+              ) {
+                return null;
+              }
+
+              const normalizedName = name.toLowerCase();
+
+              if (seenNames.has(normalizedName)) {
+                return null;
+              }
+
+              seenNames.add(normalizedName);
+
+              return {
+                id: place.id,
+                name,
+                formatted_address: place.formattedAddress || country || "",
+                lat: place.location.latitude,
+                lng: place.location.longitude,
+                rating: place.rating
+              };
+            })
+            .filter((place): place is DestinationSuggestion => place !== null) ?? [];
+
+        return {
+          country,
+          locality,
+          suggestions
+        };
+      } catch (error) {
+        console.warn(`Google destination suggestions lookup failed for "${destinationScope}".`, error);
+        return { country, locality, suggestions: [] };
+      }
+    }
+  );
 }
 
 export async function getGooglePlacePhotoUri(

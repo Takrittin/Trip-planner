@@ -52,11 +52,12 @@ Enable these APIs in Google Cloud:
 
 - Maps JavaScript API
 - Places API
+- Geocoding API
 
 Recommended key setup:
 
 - Frontend key: restrict by HTTP referrer and allow Maps JavaScript API.
-- Backend key: restrict by API usage and allow Places API.
+- Backend key: restrict by API usage and allow Places API plus Geocoding API.
 
 For local development, you can use the same Google key for both, but using two keys is safer.
 
@@ -175,6 +176,13 @@ npm run build
 ```
 
 ## Troubleshooting
+
+If the destination dropdown cannot load location-based suggestions, check:
+
+- The browser location permission was allowed.
+- The backend is running at `http://localhost:4000`.
+- Geocoding API is enabled for the backend key.
+- Places API is enabled for the backend key.
 
 If Docker says it cannot connect to the Docker API, Docker Desktop is not running. Open Docker Desktop and wait until it is ready, then run:
 
